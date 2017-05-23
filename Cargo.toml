@@ -1,0 +1,12 @@
+[package]
+name = "toolbox_data"
+version = "0.1.0"
+authors = ["XX <freecoder.xx@gmail.com>"]
+
+[dependencies]
+
+[dev-dependencies]
+serde = "*"
+serde_derive = "*"
+serde_json = "*"
+lazy_static = "*"

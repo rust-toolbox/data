@@ -1,2 +1,2 @@
-# orm
-The Rust Active Record API
+# data
+The Rust Data Mapping API
