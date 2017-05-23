@@ -9,8 +9,45 @@ use self::serde::ser::Serialize;
 use std::collections::HashMap;
 use std::sync::Mutex;
 use std::sync::MutexGuard;
+use std::ops::Deref;
+use std::ops::DerefMut;
+
 
 pub type Id = u64;
+
+type RawStore = HashMap<Id, String>;
+
+struct InMemoryStorage<'a>(MutexGuard<'a, RawStore>);
+
+impl<'a> Deref for InMemoryStorage<'a> {
+    type Target = RawStore;
+
+    fn deref(&self) -> &RawStore {
+        &self.0
+    }
+}
+
+impl<'a> DerefMut for InMemoryStorage<'a> {
+    fn deref_mut(&mut self) -> &mut RawStore {
+        &mut self.0
+    }
+}
+
+impl<'a> InMemoryStorage<'a>
+{
+    fn hold() -> Self
+    {
+        lazy_static! {
+            static ref STORE: Mutex<HashMap<Id, String>> = { Mutex::new(HashMap::new()) };
+        }
+        InMemoryStorage(STORE.lock().unwrap())
+    }
+
+    fn next_id(&self) -> Id
+    {
+        (self.len() + 1) as Id
+    }
+}
 
 pub struct Query<T: api::Identifiable<ID = Id> + Default>(T);
 
@@ -69,22 +106,9 @@ impl<T: api::Identifiable<ID = Id> + Default> api::Query for Query<T>
     }
 }
 
-pub struct InMemoryStorage;
-
-impl InMemoryStorage
-{
-    fn store<'a>() -> MutexGuard<'a, HashMap<Id, String>>
-    {
-        lazy_static! {
-            static ref STORE: Mutex<HashMap<Id, String>> = { Mutex::new(HashMap::new()) };
-        }
-        STORE.lock().unwrap()
-    }
-}
-
 pub struct DataMapper<'a, T: 'a + api::Identifiable>(pub &'a mut T);
 
-impl<'a, T: api::Identifiable<ID = Id> + Default + Serialize> api::DataMapper<'a, Id, Query<T>> for DataMapper<'a, T>
+impl<'a, T: api::Identifiable<ID = Id> + Default + Serialize + Clone> api::DataMapper<'a, Id, Query<T>> for DataMapper<'a, T>
 {
     type Entity = T;
 
@@ -99,13 +123,27 @@ impl<'a, T: api::Identifiable<ID = Id> + Default + Serialize> api::DataMapper<'a
         DataMapper::<'a>(entity)
     }
 
-    fn create(&mut self/*entity: &mut Self::Entity*/) -> bool
+    fn create(entity: &mut Self::Entity) -> bool
     {
-        let DataMapper(ref mut entity) = *self;
-        let id = (InMemoryStorage::store().len() + 1) as Id;
+        let mut store = InMemoryStorage::hold();
+        let id = store.next_id();
         entity.set_id(id);
-        InMemoryStorage::store().insert(entity.id(), serde_json::to_string(entity).unwrap());
+        let json = serde_json::to_string(entity).unwrap();
+//        println!("create {}", json);
+        store.insert(entity.id(), json);
         true
+    }
+
+    fn insert(entity: &Self::Entity) -> Id
+    {
+        let mut store = InMemoryStorage::hold();
+        let id = store.next_id();
+        let ref mut persist = entity.clone();
+        persist.set_id(id);
+        let json = serde_json::to_string(persist).unwrap();
+//        println!("insert {}", json);
+        store.insert(id, json);
+        id
     }
 
     fn update(&self) -> u32

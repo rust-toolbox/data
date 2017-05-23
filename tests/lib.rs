@@ -14,14 +14,14 @@ use toolbox_data::*;
 type Id = in_memory::Id;
 type Dm<'a, T> = in_memory::DataMapper<'a, T>;
 
-#[derive(Default, Serialize, Deserialize)]
+#[derive(Default, Clone, Serialize, Deserialize)]
 struct TestEntity
 {
     id: Id,
     name: String
 }
 
-#[derive(Default, Serialize, Deserialize)]
+#[derive(Default, Clone, Serialize, Deserialize)]
 struct OtherEntity
 {
     id: Id,
@@ -69,18 +69,36 @@ fn create()
         id: 0,
         name: "test entity".to_owned()
     };
-    Dm::at(&mut entity).create();
-    //Dm::create(&mut entity);
-    assert_eq!(1, entity.id());
+    Dm::create(&mut entity);
+    assert!(0 < entity.id());
 
+    let id = entity.id();
     let mut entity = OtherEntity {
         name: "other test entity".to_owned(),
         ..
         OtherEntity::default()
     };
-    Dm::at(&mut entity).create();
-    //Dm::create(&mut entity);
-    assert_eq!(2, entity.id());
+    Dm::create(&mut entity);
+    assert!(id < entity.id());
+}
+
+#[test]
+fn insert()
+{
+    let entity = TestEntity {
+        id: 0,
+        name: "test entity".to_owned()
+    };
+    let id = Dm::insert(&entity);
+    assert!(0 < id);
+
+    let entity = OtherEntity {
+        name: "other test entity".to_owned(),
+        ..
+        OtherEntity::default()
+    };
+    let other_id = Dm::insert(&entity);
+    assert!(id < other_id);
 }
 
 /*

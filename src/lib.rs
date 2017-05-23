@@ -32,8 +32,8 @@ pub trait DataMapper<'a, ID, Q: Query>
 
     fn find() -> Q;
     fn at(entity: &'a mut Self::Entity) -> Self;
-    fn create(&mut self) -> bool;
-    //fn create(entity: &mut Self::Entity) -> bool;
+    fn create(entity: &mut Self::Entity) -> bool;
+    fn insert(entity: &Self::Entity) -> ID;
     fn update(&self) -> u32;
     fn save(&self) -> bool;
     fn delete(&self) -> u32;
