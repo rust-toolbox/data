@@ -4,13 +4,16 @@ extern crate serde_json;
 
 #[allow(dead_code, unused_imports)]
 use self::toolbox_data as api;
-use self::serde::ser::Serialize;
+use self::serde::Serialize;
+use self::serde::de::DeserializeOwned;
+use self::serde_json::Value;
 
 use std::collections::HashMap;
 use std::sync::Mutex;
 use std::sync::MutexGuard;
 use std::ops::Deref;
 use std::ops::DerefMut;
+use std::marker::PhantomData;
 
 
 pub type Id = u64;
@@ -19,16 +22,20 @@ type RawStore = HashMap<Id, String>;
 
 struct InMemoryStorage<'a>(MutexGuard<'a, RawStore>);
 
-impl<'a> Deref for InMemoryStorage<'a> {
+impl<'a> Deref for InMemoryStorage<'a>
+{
     type Target = RawStore;
 
-    fn deref(&self) -> &RawStore {
+    fn deref(&self) -> &RawStore
+    {
         &self.0
     }
 }
 
-impl<'a> DerefMut for InMemoryStorage<'a> {
-    fn deref_mut(&mut self) -> &mut RawStore {
+impl<'a> DerefMut for InMemoryStorage<'a>
+{
+    fn deref_mut(&mut self) -> &mut RawStore
+    {
         &mut self.0
     }
 }
@@ -49,39 +56,75 @@ impl<'a> InMemoryStorage<'a>
     }
 }
 
-pub struct Query<T: api::Identifiable<ID = Id> + Default>(T);
+pub struct Query<T>
+{
+    criteria: Value,
+    phantom: PhantomData<T>
+}
 
 #[allow(unused_variables)]
-impl<T: api::Identifiable<ID = Id> + Default> api::Query for Query<T>
+impl<'a, T: api::Identifiable<ID = Id> + Default + DeserializeOwned> api::Query for Query<T>
 {
     type Entity = T;
+    type Criteria = Value;
 
     fn from<C: api::Connection>(db: C) -> Self
     {
         unimplemented!()
     }
 
-    fn one(&mut self) -> Self::Entity
+    fn one(self) -> Self::Entity
     {
-        //let Query::<T>(ref mut old) = *self;
-        //old.set_id(0u64);
-        let new = Self::Entity::default();
-        println!("one: {}", new.id());
-        new
+        let store = InMemoryStorage::hold();
+        if store.is_empty() {
+            return Self::Entity::default();
+        }
+
+        match self.criteria["by"] {
+            Value::Object(ref by) => {
+                for (key, value) in store.iter() {
+                    let object: Value = serde_json::from_str(value).unwrap();
+                    let mut equals = true;
+                    if let Value::Object(ref current) = object {
+                        for (by_key, by_value) in by.iter() {
+                            if let Some(current_value) = current.get(by_key) {
+                                if current_value != by_value {
+                                    equals = false;
+                                    break;
+                                }
+                            } else {
+                                equals = false;
+                                break;
+                            }
+                        }
+                    } else {
+                        equals = false;
+                    }
+                    if equals {
+                        return serde_json::from_value(object).unwrap();
+                    }
+                }
+                Self::Entity::default()
+            },
+            _ => {
+                for (key, ref value) in store.iter() {
+                    if let Result::Ok(entity) = serde_json::from_str::<Self::Entity>(value) {
+                        return entity;
+                    }
+                }
+                Self::Entity::default()
+            }
+        }
     }
 
-    fn all(&self) -> Vec<Self::Entity>
+    fn all(self) -> Vec<Self::Entity>
     {
         unimplemented!()
     }
 
-    fn by(&mut self) -> &Self
+    fn by(mut self, criteria: Self::Criteria) -> Self
     {
-        {
-            let Query::<T>(ref mut old) = *self;
-            old.set_id(2 as Id);
-            println!("by: {}", old.id());
-        }
+        self.criteria["by"] = criteria;
         self
     }
 
@@ -108,14 +151,13 @@ impl<T: api::Identifiable<ID = Id> + Default> api::Query for Query<T>
 
 pub struct DataMapper<'a, T: 'a + api::Identifiable>(pub &'a mut T);
 
-impl<'a, T: api::Identifiable<ID = Id> + Default + Serialize + Clone> api::DataMapper<'a, Id, Query<T>> for DataMapper<'a, T>
+impl<'a, T: api::Identifiable<ID = Id> + Default + Serialize + DeserializeOwned + Clone> api::DataMapper<'a, Id, Query<T>> for DataMapper<'a, T>
 {
     type Entity = T;
 
     fn find() -> Query<T>
     {
-        println!("find.");
-        Query(T::default())
+        Query { criteria: json!({ "by": null }), phantom: PhantomData }
     }
 
     fn at(entity: &'a mut Self::Entity) -> Self
@@ -129,7 +171,6 @@ impl<'a, T: api::Identifiable<ID = Id> + Default + Serialize + Clone> api::DataM
         let id = store.next_id();
         entity.set_id(id);
         let json = serde_json::to_string(entity).unwrap();
-//        println!("create {}", json);
         store.insert(entity.id(), json);
         true
     }
@@ -141,7 +182,6 @@ impl<'a, T: api::Identifiable<ID = Id> + Default + Serialize + Clone> api::DataM
         let ref mut persist = entity.clone();
         persist.set_id(id);
         let json = serde_json::to_string(persist).unwrap();
-//        println!("insert {}", json);
         store.insert(id, json);
         id
     }

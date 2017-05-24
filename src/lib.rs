@@ -15,11 +15,12 @@ pub trait Connection
 pub trait Query
 {
     type Entity: Identifiable;
+    type Criteria;
 
     fn from<C: Connection>(db: C) -> Self;
-    fn one(&mut self) -> Self::Entity;
-    fn all(&self) -> Vec<Self::Entity>;
-    fn by(&mut self) -> &Self;
+    fn one(self) -> Self::Entity;
+    fn all(self) -> Vec<Self::Entity>;
+    fn by(self, criteria: Self::Criteria) -> Self;
     fn limit(&self, limit: u32) -> Self;
     fn offset(&self, offset: u32) -> Self;
     fn count(&self) -> u32;

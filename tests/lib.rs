@@ -1,7 +1,8 @@
 extern crate toolbox_data;
 #[macro_use]
 extern crate serde_derive;
-
+#[macro_use]
+extern crate serde_json;
 #[macro_use]
 extern crate lazy_static;
 
@@ -14,14 +15,14 @@ use toolbox_data::*;
 type Id = in_memory::Id;
 type Dm<'a, T> = in_memory::DataMapper<'a, T>;
 
-#[derive(Default, Clone, Serialize, Deserialize)]
+#[derive(Default, Clone, Serialize, Deserialize, Debug)]
 struct TestEntity
 {
     id: Id,
     name: String
 }
 
-#[derive(Default, Clone, Serialize, Deserialize)]
+#[derive(Default, Clone, Serialize, Deserialize, Debug)]
 struct OtherEntity
 {
     id: Id,
@@ -101,7 +102,6 @@ fn insert()
     assert!(id < other_id);
 }
 
-/*
 #[test]
 fn find_one()
 {
@@ -109,18 +109,17 @@ fn find_one()
         id: 0,
         name: "test entity 1".to_owned()
     };
-    Dm::at(&mut entity).create();
-    assert_eq!(1, entity.id());
+    Dm::create(&mut entity);
+    let id = entity.id();
 
     let mut entity = TestEntity {
         id: 0,
         name: "test entity 2".to_owned()
     };
-    Dm::at(&mut entity).create();
-    assert_eq!(2, entity.id());
+    Dm::create(&mut entity);
 
-    let entity = Dm::<TestEntity>::find().by(/*id = 1*/).one();
-    assert_eq!(1, entity.id());
+    let entity = Dm::<TestEntity>::find().by(json!({ "id": id })).one();
+    assert_eq!(id, entity.id());
     assert_eq!("test entity 1".to_owned(), entity.name);
 
     let mut entity = OtherEntity {
@@ -128,11 +127,14 @@ fn find_one()
         ..
         OtherEntity::default()
     };
-    Dm::at(&mut entity).create();
-    assert_eq!(3, entity.id());
+    Dm::create(&mut entity);
+    let other_id = entity.id();
 
-    let entity = Dm::<OtherEntity>::find().by(/*id = 3*/).one();
-    assert_eq!(3, entity.id());
+    let entity = Dm::<OtherEntity>::find().by(json!({ "id": other_id })).one();
+    assert_eq!(other_id, entity.id());
     assert_eq!("other test entity".to_owned(), entity.name);
+
+    let name = "test entity 2".to_owned();
+    let entity = Dm::<TestEntity>::find().by(json!({ "name": name })).one();
+    assert_eq!(name, entity.name);
 }
-*/
