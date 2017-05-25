@@ -120,7 +120,7 @@ fn find_one()
 
     let entity = Dm::<TestEntity>::find().by(json!({ "id": id })).one();
     assert_eq!(id, entity.id());
-    assert_eq!("test entity 1".to_owned(), entity.name);
+    assert_eq!("test entity 1", entity.name);
 
     let mut entity = OtherEntity {
         name: "other test entity".to_owned(),
@@ -132,9 +132,90 @@ fn find_one()
 
     let entity = Dm::<OtherEntity>::find().by(json!({ "id": other_id })).one();
     assert_eq!(other_id, entity.id());
-    assert_eq!("other test entity".to_owned(), entity.name);
+    assert_eq!("other test entity", entity.name);
 
-    let name = "test entity 2".to_owned();
+    let name = "test entity 2";
     let entity = Dm::<TestEntity>::find().by(json!({ "name": name })).one();
     assert_eq!(name, entity.name);
+
+    let entity = OtherEntity {
+        name: "other test entity".to_owned(),
+        ..
+        OtherEntity::default()
+    };
+    Dm::insert(&entity);
+
+    let name = "other test entity";
+    let entity = Dm::<OtherEntity>::find().by(json!({ "name": name })).one();
+    assert_eq!(name, entity.name);
+}
+
+#[test]
+fn find_all()
+{
+    let mut ids: Vec<Id> = Vec::new();
+    let entity = TestEntity {
+        id: 0,
+        name: "test all entity".to_owned()
+    };
+    ids.push(Dm::insert(&entity));
+
+    let entity = TestEntity {
+        id: 0,
+        name: "test all entity".to_owned()
+    };
+    ids.push(Dm::insert(&entity));
+
+    let entity = OtherEntity {
+        name: "other test all entity".to_owned(),
+        ..
+        OtherEntity::default()
+    };
+    let other_id = Dm::insert(&entity);
+
+    let name = "test all entity";
+    let entities = Dm::<TestEntity>::find().by(json!({ "name": name })).all();
+    assert_eq!(2, entities.len());
+    for entity in entities {
+        assert!(ids.contains(&entity.id));
+        assert_eq!(name, entity.name);
+    }
+
+    let name = "other test all entity";
+    let entities = Dm::<OtherEntity>::find().by(json!({ "name": name })).all();
+    assert_eq!(1, entities.len());
+    assert_eq!(other_id, entities[0].id);
+    assert_eq!(name, entities[0].name);
+}
+
+#[test]
+fn update()
+{
+    let entity = TestEntity {
+        id: 0,
+        name: "test entity".to_owned()
+    };
+    let id = Dm::insert(&entity);
+    assert!(0 < id);
+
+    let updated = Dm::update(&entity);
+    assert!(updated == false);
+
+    let name = "new";
+    let mut entity = entity;
+    entity.set_id(id);
+    entity.name = name.to_owned();
+
+    let updated = Dm::update(&entity);
+    assert!(updated);
+
+    let entity = Dm::<TestEntity>::find().by(json!({ "id": entity.id() })).one();
+    assert_eq!(name, entity.name);
+
+    let entity = TestEntity {
+        id: 10100,
+        name: "test entity 2".to_owned()
+    };
+    let updated = Dm::update(&entity);
+    assert!(updated == false);
 }

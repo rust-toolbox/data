@@ -119,7 +119,47 @@ impl<'a, T: api::Identifiable<ID = Id> + Default + DeserializeOwned> api::Query 
 
     fn all(self) -> Vec<Self::Entity>
     {
-        unimplemented!()
+        let mut all: Vec<Self::Entity> = Vec::new();
+        let store = InMemoryStorage::hold();
+        if store.is_empty() {
+            return all;
+        }
+
+        match self.criteria["by"] {
+            Value::Object(ref by) => {
+                for (key, value) in store.iter() {
+                    let object: Value = serde_json::from_str(value).unwrap();
+                    let mut equals = true;
+                    if let Value::Object(ref current) = object {
+                        for (by_key, by_value) in by.iter() {
+                            if let Some(current_value) = current.get(by_key) {
+                                if current_value != by_value {
+                                    equals = false;
+                                    break;
+                                }
+                            } else {
+                                equals = false;
+                                break;
+                            }
+                        }
+                    } else {
+                        equals = false;
+                    }
+                    if equals {
+                        all.push(serde_json::from_value(object).unwrap());
+                    }
+                }
+                all
+            },
+            _ => {
+                for (key, ref value) in store.iter() {
+                    if let Result::Ok(entity) = serde_json::from_str::<Self::Entity>(value) {
+                        all.push(entity);
+                    }
+                }
+                all
+            }
+        }
     }
 
     fn by(mut self, criteria: Self::Criteria) -> Self
@@ -179,16 +219,23 @@ impl<'a, T: api::Identifiable<ID = Id> + Default + Serialize + DeserializeOwned 
     {
         let mut store = InMemoryStorage::hold();
         let id = store.next_id();
-        let ref mut persist = entity.clone();
-        persist.set_id(id);
-        let json = serde_json::to_string(persist).unwrap();
+        let ref mut persistent = entity.clone();
+        persistent.set_id(id);
+        let json = serde_json::to_string(persistent).unwrap();
         store.insert(id, json);
         id
     }
 
-    fn update(&self) -> u32
+    fn update(entity: &Self::Entity) -> bool
     {
-        unimplemented!()
+        let mut store = InMemoryStorage::hold();
+        if store.contains_key(&entity.id()) {
+            let json = serde_json::to_string(entity).unwrap();
+            store.insert(entity.id(), json);
+            true
+        } else {
+            false
+        }
     }
 
     fn save(&self) -> bool
