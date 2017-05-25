@@ -30,12 +30,14 @@ pub trait Query
 pub trait DataMapper<'a, ID, Q: Query>
 {
     type Entity: Identifiable<ID = ID>;
+    type Action;
 
+    fn query(action: Self::Action) -> Q;
     fn find() -> Q;
-    fn at(entity: &'a mut Self::Entity) -> Self;
     fn create(entity: &mut Self::Entity) -> bool;
     fn insert(entity: &Self::Entity) -> ID;
     fn update(entity: &Self::Entity) -> bool;
-    fn save(&self) -> bool;
-    fn delete(&self) -> u32;
+    fn save(entity: &mut Self::Entity) -> bool;
+    fn insert_or_update(entity: &Self::Entity) -> bool;
+    fn delete(entity: &Self::Entity) -> bool;
 }

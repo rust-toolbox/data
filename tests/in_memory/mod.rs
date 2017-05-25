@@ -56,8 +56,20 @@ impl<'a> InMemoryStorage<'a>
     }
 }
 
+#[allow(dead_code)]
+pub enum QueryAction
+{
+    None,
+    Find,
+    Insert,
+    Update,
+    Delete
+}
+
+#[allow(dead_code)]
 pub struct Query<T>
 {
+    action: QueryAction,
     criteria: Value,
     phantom: PhantomData<T>
 }
@@ -194,15 +206,16 @@ pub struct DataMapper<'a, T: 'a + api::Identifiable>(pub &'a mut T);
 impl<'a, T: api::Identifiable<ID = Id> + Default + Serialize + DeserializeOwned + Clone> api::DataMapper<'a, Id, Query<T>> for DataMapper<'a, T>
 {
     type Entity = T;
+    type Action = QueryAction;
+
+    fn query(action: Self::Action) -> Query<T>
+    {
+        Query { action: action, criteria: json!({ "by": null }), phantom: PhantomData }
+    }
 
     fn find() -> Query<T>
     {
-        Query { criteria: json!({ "by": null }), phantom: PhantomData }
-    }
-
-    fn at(entity: &'a mut Self::Entity) -> Self
-    {
-        DataMapper::<'a>(entity)
+        Query { action: QueryAction::Find, criteria: json!({ "by": null }), phantom: PhantomData }
     }
 
     fn create(entity: &mut Self::Entity) -> bool
@@ -238,12 +251,20 @@ impl<'a, T: api::Identifiable<ID = Id> + Default + Serialize + DeserializeOwned 
         }
     }
 
-    fn save(&self) -> bool
+    #[allow(unused_variables)]
+    fn save(entity: &mut Self::Entity) -> bool
     {
         unimplemented!()
     }
 
-    fn delete(&self) -> u32
+    #[allow(unused_variables)]
+    fn insert_or_update(entity: &Self::Entity) -> bool
+    {
+        unimplemented!()
+    }
+
+    #[allow(unused_variables)]
+    fn delete(entity: &Self::Entity) -> bool
     {
         unimplemented!()
     }
