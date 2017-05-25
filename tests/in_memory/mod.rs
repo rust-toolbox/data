@@ -52,7 +52,33 @@ impl<'a> InMemoryStorage<'a>
 
     fn next_id(&self) -> Id
     {
-        (self.len() + 1) as Id
+        unsafe {
+            static mut SEQUENCE_VALUE: Id = 0 as Id;
+            SEQUENCE_VALUE += 1;
+            SEQUENCE_VALUE
+        }
+    }
+
+    fn persist<T>(&mut self, entity: &mut T) -> Id
+        where T: api::Identifiable<ID = Id> + Serialize + DeserializeOwned
+    {
+        let id = self.next_id();
+        entity.set_id(id);
+        let json = serde_json::to_string(entity).unwrap();
+        self.insert(id, json);
+        id
+    }
+
+    fn renew<T>(&mut self, entity: &T) -> bool
+        where T: api::Identifiable<ID = Id> + Serialize + DeserializeOwned
+    {
+        if self.contains_key(&entity.id()) {
+            let json = serde_json::to_string(entity).unwrap();
+            self.insert(entity.id(), json);
+            true
+        } else {
+            false
+        }
     }
 }
 
@@ -218,54 +244,58 @@ impl<'a, T: api::Identifiable<ID = Id> + Default + Serialize + DeserializeOwned 
         Query { action: QueryAction::Find, criteria: json!({ "by": null }), phantom: PhantomData }
     }
 
-    fn create(entity: &mut Self::Entity) -> bool
+    fn create(entity: &'a mut Self::Entity) -> bool
     {
         let mut store = InMemoryStorage::hold();
-        let id = store.next_id();
-        entity.set_id(id);
-        let json = serde_json::to_string(entity).unwrap();
-        store.insert(entity.id(), json);
+        store.persist(entity);
         true
     }
 
-    fn insert(entity: &Self::Entity) -> Id
+    fn insert(entity: &'a Self::Entity) -> Id
     {
         let mut store = InMemoryStorage::hold();
-        let id = store.next_id();
         let ref mut persistent = entity.clone();
-        persistent.set_id(id);
-        let json = serde_json::to_string(persistent).unwrap();
-        store.insert(id, json);
-        id
+        store.persist(persistent)
     }
 
-    fn update(entity: &Self::Entity) -> bool
+    fn update(entity: &'a Self::Entity) -> bool
+    {
+        let mut store = InMemoryStorage::hold();
+        store.renew(entity)
+    }
+
+    fn save(entity: &'a mut Self::Entity) -> bool
     {
         let mut store = InMemoryStorage::hold();
         if store.contains_key(&entity.id()) {
-            let json = serde_json::to_string(entity).unwrap();
-            store.insert(entity.id(), json);
-            true
+            store.renew(entity)
         } else {
-            false
+            store.persist(entity);
+            true
+        }
+    }
+
+    fn insert_or_update(entity: &'a Self::Entity) -> Id
+    {
+        let mut store = InMemoryStorage::hold();
+        if store.contains_key(&entity.id()) {
+            store.renew(entity);
+            entity.id()
+        } else {
+            let ref mut persistent = entity.clone();
+            store.persist(persistent)
         }
     }
 
     #[allow(unused_variables)]
-    fn save(entity: &mut Self::Entity) -> bool
+    fn delete(entity: &'a Self::Entity) -> bool
     {
-        unimplemented!()
-    }
-
-    #[allow(unused_variables)]
-    fn insert_or_update(entity: &Self::Entity) -> bool
-    {
-        unimplemented!()
-    }
-
-    #[allow(unused_variables)]
-    fn delete(entity: &Self::Entity) -> bool
-    {
-        unimplemented!()
+        let mut store = InMemoryStorage::hold();
+        let result = store.remove(&entity.id());
+        if let Some(_) = result {
+            true
+        } else {
+            false
+        }
     }
 }

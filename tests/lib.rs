@@ -122,6 +122,12 @@ fn find_one()
     assert_eq!(id, entity.id());
     assert_eq!("test entity 1", entity.name);
 
+    let entity = Dm::<TestEntity>::query(in_memory::QueryAction::Find)
+        .by(json!({ "id": id }))
+        .one();
+    assert_eq!(id, entity.id());
+    assert_eq!("test entity 1", entity.name);
+
     let mut entity = OtherEntity {
         name: "other test entity".to_owned(),
         ..
@@ -218,4 +224,75 @@ fn update()
     };
     let updated = Dm::update(&entity);
     assert!(updated == false);
+}
+
+#[test]
+fn save()
+{
+    let name = "test entity";
+    let mut entity = TestEntity {
+        id: 0,
+        name: name.to_owned()
+    };
+    assert!(Dm::save(&mut entity));
+    assert!(0 < entity.id());
+
+    let mut entity = Dm::<TestEntity>::find().by(json!({ "id": entity.id() })).one();
+    assert_eq!(name, entity.name);
+
+    let name = "new";
+    entity.name = name.to_owned();
+    assert!(Dm::save(&mut entity));
+
+    let entity = Dm::<TestEntity>::find().by(json!({ "id": entity.id() })).one();
+    assert_eq!(name, entity.name);
+}
+
+#[test]
+fn insert_or_update()
+{
+    let name = "test entity";
+    let entity = TestEntity {
+        id: 0,
+        name: name.to_owned()
+    };
+    let id = Dm::insert_or_update(&entity);
+    assert!(0 < id);
+
+    let mut entity = Dm::<TestEntity>::find().by(json!({ "id": id })).one();
+    assert_eq!(name, entity.name);
+
+    let name = "new";
+    entity.name = name.to_owned();
+    Dm::insert_or_update(&entity);
+
+    let entity = Dm::<TestEntity>::find().by(json!({ "id": entity.id() })).one();
+    assert_eq!(name, entity.name);
+}
+
+#[test]
+fn delete()
+{
+    let name = "test del entity";
+    let mut entity = TestEntity {
+        id: 0,
+        name: name.to_owned()
+    };
+    assert!(Dm::create(&mut entity));
+    let id = entity.id();
+    assert!(0 < id);
+
+    assert!(Dm::delete(&entity));
+
+    {
+        let entity = Dm::<TestEntity>::find().by(json!({ "id": id, "name": name })).one();
+        assert_eq!(0, entity.id());
+    }
+
+    assert!(Dm::save(&mut entity));
+    assert!(id != entity.id());
+
+    let entity = Dm::<TestEntity>::find().by(json!({ "id": entity.id() })).one();
+    assert_eq!(name, entity.name);
+    assert!(id != entity.id());
 }

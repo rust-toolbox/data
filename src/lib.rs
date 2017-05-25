@@ -34,10 +34,10 @@ pub trait DataMapper<'a, ID, Q: Query>
 
     fn query(action: Self::Action) -> Q;
     fn find() -> Q;
-    fn create(entity: &mut Self::Entity) -> bool;
-    fn insert(entity: &Self::Entity) -> ID;
-    fn update(entity: &Self::Entity) -> bool;
-    fn save(entity: &mut Self::Entity) -> bool;
-    fn insert_or_update(entity: &Self::Entity) -> bool;
-    fn delete(entity: &Self::Entity) -> bool;
+    fn create(entity: &'a mut Self::Entity) -> bool;
+    fn insert(entity: &'a Self::Entity) -> ID;
+    fn update(entity: &'a Self::Entity) -> bool;
+    fn save(entity: &'a mut Self::Entity) -> bool;
+    fn insert_or_update(entity: &'a Self::Entity) -> ID;
+    fn delete(entity: &'a Self::Entity) -> bool;
 }
